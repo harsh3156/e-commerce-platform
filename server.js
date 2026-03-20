@@ -1,65 +1,96 @@
-// server.js
-import express from "express";
-import dotenv from "dotenv";
-import cors from "cors";
-import mongoose from "mongoose";
-import path from "path";
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
 
-import authRoutes from "./routes/authRoutes.js";
-import productRoutes from "./routes/productRoutes.js";
-import cartRoutes from "./routes/cartRoutes.js";
-import orderRoutes from "./routes/orderRoutes.js";
-import advertiseRoutes from "./routes/advertiseRoutes.js";
-import userRoutes from "./routes/userRoutes.js";
-import paymentRoutes from "./routes/paymentRoutes.js";
-
-dotenv.config();
 const app = express();
-
-// ⭐ Enhanced CORS configuration to allow Razorpay and other external services
-const corsOptions = {
-  origin: [
-    "http://localhost:3000",
-    "http://localhost:5000",
-    "https://api.razorpay.com",
-    "https://checkout.razorpay.com",
-  ],
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-};
-
-app.use(cors(corsOptions));
+app.use(cors());
 app.use(express.json());
 
-// ⭐ Serve static images properly
-const __dirname = path.resolve();
-app.use("/public/images", express.static(path.join(__dirname, "public/images")));
-app.use("/public/ads", express.static(path.join(__dirname, "public/ads")));
+// MongoDB connection
+mongoose.connect("mongodb://localhost:27017/temp")
+  .then(() => console.log("MongoDB Connected"))
+  .catch(err => console.log(err));
 
-// ⭐ Add middleware to set proper headers for static images
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type");
-  // ⭐ Disable sensor permissions to prevent warning
-  res.header("Permissions-Policy", "accelerometer=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=()");
-  next();
+// Schema
+const UserSchema = new mongoose.Schema({
+  name: String,
+  email: String,
+  age: Number
 });
 
-mongoose
-  .connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.log(err));
+const UserModel = mongoose.model("users", UserSchema);
 
-app.use("/api/auth", authRoutes);
-app.use("/api/products", productRoutes);
-app.use("/api/cart", cartRoutes);
-app.use("/api/orders", orderRoutes);
-app.use("/api/ads", advertiseRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/payment", paymentRoutes);
+// INSERT API
+app.post("/insert", async (req, res) => {
+  try {
+    const user = await UserModel.create(req.body);
+    res.json(user);
+  } catch (err) {
+    res.status(500).json(err);
+  }
+});
+
+// SELECT API
+app.get("/users", async (req, res) => {
+  try {
+    const users = await UserModel.find();
+    res.json(users);
+  } catch (err) {
+    res.status(500).json(err);
+  }
+});
+app.delete("/delete/:id", async (req, res) => {
+  try {
+    await UserModel.findByIdAndDelete(req.params.id);
+    res.json({ message: "User deleted successfully" });
+  } catch (err) {
+    res.status(500).json(err);
+  }
+});
+app.put("/update/:id", async (req, res) => {
+  try {
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true }
+    );
+    res.json(updatedUser);
+  } catch (err) {
+    res.status(500).json(err);
+  }
+});
 
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+
+const User = mongoose.model("User", {
+  name: String,
+  email: String,
+  password: String
+});
+
+
+// ===== REGISTER =====
+app.post("/register", async (req, res) => {
+  await User.create(req.body);
+  res.send("register success");
+});
+
+
+// ===== LOGIN =====
+app.post("/login", async (req, res) => {
+
+  const { email, password } = req.body;
+
+  const user = await User.findOne({ email, password });
+
+  if (user) {
+    res.json({ status: "ok" });
+  } else {
+    res.json({ status: "fail" });
+  }
+
+});
+
+app.listen(5000, () => {
+  console.log("Server running on port 5000");
+});
